@@ -45,11 +45,6 @@ tubeWallTexture.wrapS = THREE.RepeatWrapping;
 tubeWallTexture.wrapT = THREE.RepeatWrapping;
 tubeWallTexture.repeat.set(2, 2);
 
-const ObsWallTexture  = textureLoader.load("https://images.freecreatives.com/wp-content/uploads/2016/08/3d-textures.jpg");
-ObsWallTexture.wrapS = THREE.RepeatWrapping;
-ObsWallTexture.wrapT = THREE.RepeatWrapping;
-ObsWallTexture.repeat.set(1,2)
-
 const tubeMaterial = new THREE.MeshPhongMaterial({
     map: tubeWallTexture,
     side: THREE.DoubleSide,
@@ -174,19 +169,18 @@ function createObstacleWithHoles({
         if (holeShapes && holeShapes[i]) {
             shapeType = holeShapes[i];
         } else {
-            const types = ['circle'];
+            const types = ['circle', 'square', 'triangle'];
             shapeType = types[Math.floor(Math.random() * types.length)];
         }
 
         // Add hole to shape
         if (shapeType === 'circle') {
-            // The circle diameter should be equal to the obstacle's radius (tubeRadius)
-            const holeRadius = tubeRadius / 2;
+            const holeRadius = tubeRadius * (0.25 + Math.random() * 0.15);
             const holePath = new THREE.Path();
             holePath.absarc(cx, cy, holeRadius, 0, Math.PI * 2, true);
             outerShape.holes.push(holePath);
         } else if (shapeType === 'square') {
-            const size = tubeRadius
+            const size = tubeRadius * (0.35 + Math.random() * 0.1);
             const holePath = new THREE.Path();
             holePath.moveTo(cx - size / 2, cy - size / 2);
             holePath.lineTo(cx + size / 2, cy - size / 2);
@@ -194,7 +188,23 @@ function createObstacleWithHoles({
             holePath.lineTo(cx - size / 2, cy + size / 2);
             holePath.lineTo(cx - size / 2, cy - size / 2);
             outerShape.holes.push(holePath);
-        } 
+        } else if (shapeType === 'triangle') {
+            const size = tubeRadius * (0.38 + Math.random() * 0.08);
+            const holePath = new THREE.Path();
+            // Equilateral triangle
+            for (let j = 0; j < 3; j++) {
+                const theta = angle + Math.PI * 2 * (j / 3);
+                const x = cx + Math.cos(theta) * size / 2;
+                const y = cy + Math.sin(theta) * size / 2;
+                if (j === 0) {
+                    holePath.moveTo(x, y);
+                } else {
+                    holePath.lineTo(x, y);
+                }
+            }
+            holePath.closePath();
+            outerShape.holes.push(holePath);
+        }
     }
 
     // Extrude settings: thin wall
@@ -228,25 +238,19 @@ function createObstacleWithHoles({
 }
 
 const obstacles = [];
-const obstacleGeometries = []; // Our pool of pre-made geometries
-const obstacleSpacing = 60;
-const maxObstacles = 8;
+const obstacleSpacing = 60; // Distance between obstacles along Z
+const maxObstacles = 6; // How many obstacles to keep in the scene
 
-// Pre-generate 15 different obstacle geometries to choose from
-for (let i = 0; i < 15; i++) {
-    const geom = createObstacleWithHoles({ tubeRadius, thickness: 0.18 }).geometry;
-    obstacleGeometries.push(geom);
-}
-
-// Create the initial obstacles using the pool
+// Pre-populate obstacles
 for (let i = 0; i < maxObstacles; i++) {
-    const material = new THREE.MeshPhongMaterial({ map: ObsWallTexture, side: THREE.DoubleSide });
-    // Assign a random geometry from our pool
-    const obstacle = new THREE.Mesh(obstacleGeometries[i % obstacleGeometries.length], material);
-    // Position them down the negative Z axis
-    obstacle.position.z = -(40 + i * obstacleSpacing);
-    obstacle.castShadow = true;
-    obstacle.receiveShadow = true;
+    const z = 30 + i * obstacleSpacing;
+    const color = [0x3A86FF, 0xFFBE0B, 0xFB5607, 0xFF006E, 0x8338EC][i % 5];
+    const obstacle = createObstacleWithHoles({
+        tubeRadius,
+        thickness: 0.18,
+        z,
+        color,
+    });
     scene.add(obstacle);
     obstacles.push(obstacle);
 }
@@ -302,19 +306,26 @@ function animate() {
             tube.position.z = minZ - tubeLength + tubeOverlap;
         }
     }
-    // --- CORRECTED OBSTACLE RECYCLING (inside animate function) ---
-for (const obs of obstacles) {
-    // Check if the obstacle is "behind" the camera (Z is greater than camera's Z)
-    if (obs.position.z > camera.position.z) {
-        const minZ = Math.min(...obstacles.map(o => o.position.z));
-        // Move the obstacle far ahead (more negative Z)
-        obs.position.z = minZ - obstacleSpacing;
-
-        // Swap its geometry with another one from the pool (FAST!)
-        obs.geometry.dispose();
-        obs.geometry = obstacleGeometries[Math.floor(Math.random() * obstacleGeometries.length)];
+    for (let i = 0; i < obstacles.length; i++) {
+        const obs = obstacles[i];
+        // If the obstacle is far behind the camera, recycle it ahead
+        if (obs.position.z < cameraZ - 10) {
+            // Find the furthest obstacle
+            let maxZ = Math.max(...obstacles.map(o => o.position.z));
+            obs.position.z = maxZ + obstacleSpacing;
+            // Optionally randomize color and holes
+            obs.material.color.setHex([0x3A86FF, 0xFFBE0B, 0xFB5607, 0xFF006E, 0x8338EC][Math.floor(Math.random()*5)]);
+            // Optionally, replace geometry for new holes
+            const newObstacle = createObstacleWithHoles({
+                tubeRadius,
+                thickness: 0.18,
+                z: obs.position.z,
+                color: obs.material.color.getHex(),
+            });
+            obs.geometry.dispose();
+            obs.geometry = newObstacle.geometry;
+        }
     }
-}
     
     // --- 4. Render the Scene ---
     renderer.render(scene, camera);
