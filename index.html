@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>My first three.js app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      body { margin: 0; }
+      #joystick-container {
+        position: fixed;
+        left: 50vw;
+        bottom: 4vh; /* Moved more to the bottom */
+        transform: translateX(-50%);
+        z-index: 10;
+        width: 18vw;
+        height: 18vw;
+        max-width: 340px;
+        max-height: 340px;
+        min-width: 160px;
+        min-height: 160px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        touch-action: none;
+      }
+      #joystick-base {
+        width: 50%;
+        height: 50%;
+        background: rgba(60, 60, 80, 0.32);
+        border-radius: 50%;
+        border: 2.5px solid #3A86FF;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+        pointer-events: auto;
+        touch-action: none;
+        transition: background 0.2s;
+      }
+      #joystick-knob {
+        width: 20%;
+        height: 20%;
+        background: linear-gradient(145deg, #3A86FF 60%, #fff 100%);
+        border-radius: 50%;
+        border: 2.5px solid #fff;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.22);
+        pointer-events: auto;
+        touch-action: none;
+        transition: box-shadow 0.1s, background 0.2s;
+        will-change: transform;
+      }
+      #joystick-knob.active {
+        box-shadow: 0 4px 24px rgba(58,134,255,0.25);
+        background: linear-gradient(145deg, #3A86FF 80%, #fff 100%);
+      }
+      @media (max-width: 600px) {
+        #joystick-container {
+          width: 60vw;
+          height: 60vw;
+          min-width: 120px;
+          min-height: 120px;
+          max-width: 90vw;
+          max-height: 90vw;
+          bottom: 2vh; /* Even closer to bottom on small screens */
+        }
+      }
+      @media (max-width: 400px) {
+        #joystick-container {
+          width: 80vw;
+          height: 80vw;
+          min-width: 80px;
+          min-height: 80px;
+          bottom: 1vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="joystick-container">
+      <div id="joystick-base"></div>
+      <div id="joystick-knob"></div>
+    </div>
+    <script type="module" src="./main.js"></script>
+    <script>
+      // Responsive joystick logic
+      const base = document.getElementById('joystick-base');
+      const knob = document.getElementById('joystick-knob');
+      const container = document.getElementById('joystick-container');
+      let dragging = false;
+
+      function getBaseCenterAndRadius() {
+        const rect = base.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+          r: rect.width / 2
+        };
+      }
+
+      function setKnob(x, y) {
+        knob.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+      }
+
+      function resetKnob() {
+        setKnob(0, 0);
+        knob.classList.remove('active');
+        // Dispatch event for "joystick released"
+        const event = new CustomEvent('joystickMove', { detail: { x: 0, y: 0 } });
+        window.dispatchEvent(event);
+      }
+
+      function handleMove(clientX, clientY) {
+        const { x: cx, y: cy, r } = getBaseCenterAndRadius();
+        let dx = clientX - cx;
+        let dy = clientY - cy;
+        // Clamp to base circle
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const knobRadius = base.offsetWidth * 0.19; // 38% / 2
+        const maxDist = r - knobRadius;
+        if (dist > maxDist) {
+          dx = dx * maxDist / dist;
+          dy = dy * maxDist / dist;
+        }
+        setKnob(dx, dy);
+        // Dispatch event for "joystick moved"
+        const normX = dx / maxDist;
+        const normY = dy / maxDist;
+        const event = new CustomEvent('joystickMove', { detail: { x: normX, y: normY } });
+        window.dispatchEvent(event);
+      }
+
+      // Mouse events
+      knob.addEventListener('mousedown', (e) => {
+        dragging = true;
+        knob.classList.add('active');
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (dragging) {
+          handleMove(e.clientX, e.clientY);
+        }
+      });
+      document.addEventListener('mouseup', (e) => {
+        if (dragging) {
+          dragging = false;
+          resetKnob();
+        }
+      });
+
+      // Touch events
+      knob.addEventListener('touchstart', (e) => {
+        dragging = true;
+        knob.classList.add('active');
+        e.preventDefault();
+      }, { passive: false });
+      document.addEventListener('touchmove', (e) => {
+        if (dragging && e.touches.length > 0) {
+          handleMove(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+      document.addEventListener('touchend', (e) => {
+        if (dragging) {
+          dragging = false;
+          resetKnob();
+        }
+      });
+
+      // Prevent scrolling on joystick
+      base.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+      // Make sure joystick is always centered and responsive
+      window.addEventListener('resize', resetKnob);
+
+      // Initialize
+      resetKnob();
+    </script>
+  </body>
+</html>
