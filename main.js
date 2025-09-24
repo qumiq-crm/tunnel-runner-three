@@ -8,7 +8,6 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x10102a); // Dark blue space background
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-// Place the camera at a positive Z so it looks down the -Z axis (the default in Three.js)
 camera.position.z = 0;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -24,10 +23,9 @@ const ambientLight = new THREE.AmbientLight(0x606080, 10);
 scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-// Place the light in front of the camera, so it shines down the -Z axis
-directionalLight.position.set(5, 5, 10); // Positive Z, in front of camera
-camera.add(directionalLight); // Light moves with the camera
-scene.add(camera); // Add camera to the scene so its children are visible
+directionalLight.position.set(5, 5, 10);
+camera.add(directionalLight);
+scene.add(camera);
 
 //================================================================================
 // Tube Creation (Performance Optimized)
@@ -37,7 +35,7 @@ const tubeLength = 20;
 const numSegments = 12;
 const tubeOverlap = 0.2;
 const tubeSegments = [];
-let baseTubeGeom; // Single, reusable geometry
+let baseTubeGeom;
 
 const textureLoader = new THREE.TextureLoader();
 const tubeWallTexture = textureLoader.load("https://cdn.pixabay.com/photo/2016/12/18/21/23/brick-wall-1916752_1280.jpg");
@@ -63,7 +61,7 @@ for (let i = 0; i < numSegments; i++) {
         baseTubeGeom = new THREE.TubeGeometry(path, 32, tubeRadius, 32, false);
     }
     const tube = new THREE.Mesh(baseTubeGeom, tubeMaterial);
-    tube.position.z = -i * (tubeLength - tubeOverlap); // Tubes extend in -Z direction
+    tube.position.z = -i * (tubeLength - tubeOverlap);
     scene.add(tube);
     tubeSegments.push(tube);
 }
@@ -77,7 +75,7 @@ const rings = [];
 const gltfLoader = new GLTFLoader();
 
 gltfLoader.load(
-    './space.glb', // <-- DOUBLE CHECK THIS PATH IS CORRECT!
+    './space.glb',
     (gltf) => {
         rocket = gltf.scene;
 
@@ -101,16 +99,12 @@ gltfLoader.load(
             if (obj.name.toLowerCase().includes("tor")) { rings.push(obj); }
         });
 
-        // --- THIS IS THE KEY ---
-        // 1. Add the rocket as a child of the camera.
-        // 2. Position it in front of the camera (negative Z).
-        // 3. FIX: Rotate the rocket 180 degrees around Y so it points down -Z.
         camera.add(rocket);
         rocket.position.set(0, 0, -5);
-        rocket.rotation.y = Math.PI; // Fix orientation so rocket points forward
+        rocket.rotation.y = Math.PI;
         console.log("Rocket loaded and added to camera.");
     },
-    undefined, // onProgress callback not needed
+    undefined,
     (error) => {
         console.error("CRITICAL ERROR: Could not load 'space.glb'. Check the file path and make sure the file is not corrupt.", error);
     }
@@ -137,67 +131,50 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// --- Predefined obstacle patterns for more interesting and consistent obstacles ---
+const PREDEFINED_OBSTACLE_PATTERNS = [
+    [
+        { type: 'circle', angle: 0 },
+        { type: 'circle', angle: Math.PI }
+    ],
+    [
+        { type: 'circle', angle: 0 },
+        { type: 'circle', angle: (2 * Math.PI) / 3 },
+        { type: 'circle', angle: (4 * Math.PI) / 3 }
+    ]
+];
+
+function pickObstaclePattern() {
+    if (PREDEFINED_OBSTACLE_PATTERNS.length > 0) {
+        const idx = Math.floor(Math.random() * PREDEFINED_OBSTACLE_PATTERNS.length);
+        return PREDEFINED_OBSTACLE_PATTERNS[idx];
+    }
+    return [];
+}
+
 function createObstacleWithHoles({
     tubeRadius = 2,
     thickness = 0.15,
     z = 0,
-    numHoles = 2 + Math.floor(Math.random() * 2), // 2 or 3 holes
-    holeShapes = null, // e.g. ['circle', 'square', 'triangle']
+    numHoles = 2 + Math.floor(Math.random() * 2),
+    holeShapes = null,
     color = 0x3A86FF,
 } = {}) {
-    // Outer circle shape (covers the tube)
     const outerShape = new THREE.Shape();
     outerShape.absarc(0, 0, tubeRadius, 0, Math.PI * 2, false);
 
-    // Generate holes
-    const holes = [];
-    const usedAngles = [];
-    for (let i = 0; i < numHoles; i++) {
-        // Pick a random angle and distance from center for the hole
-        let angle, r;
-        // Try to avoid overlapping holes
-        let tries = 0;
-        do {
-            angle = Math.random() * Math.PI * 2;
-            r = tubeRadius * 0.5 + Math.random() * (tubeRadius * 0.35);
-            tries++;
-        } while (
-            usedAngles.some(a => Math.abs(a - angle) < Math.PI / 6) && tries < 10
-        );
-        usedAngles.push(angle);
+    const pattern = pickObstaclePattern(tubeRadius, numHoles, holeShapes);
 
-        const cx = Math.cos(angle) * r;
-        const cy = Math.sin(angle) * r;
-
-        // Pick shape
-        let shapeType;
-        if (holeShapes && holeShapes[i]) {
-            shapeType = holeShapes[i];
-        } else {
-            const types = ['circle'];
-            shapeType = types[Math.floor(Math.random() * types.length)];
-        }
-
-        // Add hole to shape
-        if (shapeType === 'circle') {
-            // The circle diameter should be equal to the obstacle's radius (tubeRadius)
-            const holeRadius = tubeRadius / 2;
-            const holePath = new THREE.Path();
-            holePath.absarc(cx, cy, holeRadius, 0, Math.PI * 2, true);
-            outerShape.holes.push(holePath);
-        } else if (shapeType === 'square') {
-            const size = tubeRadius
-            const holePath = new THREE.Path();
-            holePath.moveTo(cx - size / 2, cy - size / 2);
-            holePath.lineTo(cx + size / 2, cy - size / 2);
-            holePath.lineTo(cx + size / 2, cy + size / 2);
-            holePath.lineTo(cx - size / 2, cy + size / 2);
-            holePath.lineTo(cx - size / 2, cy - size / 2);
-            outerShape.holes.push(holePath);
-        } 
+    for(let i = 0;i<pattern.length;i++){
+        const holeRadius = tubeRadius * 0.49;
+        const holeAngle = pattern[i].angle;
+        const holeX = Math.cos(holeAngle) * holeRadius;
+        const holeY = Math.sin(holeAngle) * holeRadius;
+        const holeShape = new THREE.Path();
+        holeShape.absarc(holeX, holeY, holeRadius, 0.2, Math.PI * 2,false);
+        outerShape.holes.push(holeShape);
     }
 
-    // Extrude settings: thin wall
     const extrudeSettings = {
         depth: thickness,
         bevelEnabled: false,
@@ -206,7 +183,6 @@ function createObstacleWithHoles({
     const geometry = new THREE.ExtrudeGeometry(outerShape, extrudeSettings);
     geometry.center();
 
-    // Material
     const material = new THREE.MeshPhongMaterial({
         map: ObsWallTexture,
         shininess: 60,
@@ -221,14 +197,11 @@ function createObstacleWithHoles({
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
-    // Optionally, add a subtle glow or outline
-    // (could add a second mesh with emissive material, or use postprocessing)
-
     return mesh;
 }
 
 const obstacles = [];
-const obstacleGeometries = []; // Our pool of pre-made geometries
+const obstacleGeometries = [];
 const obstacleSpacing = 60;
 const maxObstacles = 8;
 
@@ -241,50 +214,194 @@ for (let i = 0; i < 15; i++) {
 // Create the initial obstacles using the pool
 for (let i = 0; i < maxObstacles; i++) {
     const material = new THREE.MeshPhongMaterial({ map: ObsWallTexture, side: THREE.DoubleSide });
-    // Assign a random geometry from our pool
     const obstacle = new THREE.Mesh(obstacleGeometries[i % obstacleGeometries.length], material);
-    // Position them down the negative Z axis
     obstacle.position.z = -(40 + i * obstacleSpacing);
     obstacle.castShadow = true;
     obstacle.receiveShadow = true;
     scene.add(obstacle);
     obstacles.push(obstacle);
 }
+
+//================================================================================
+// Game Over State & Score
+//================================================================================
+let isGameOver = false;
+let score = 0;
+let lastPassedObstacleIndex = -1;
+
+// Score display (refer to index.html, expects <div id="score"></div>)
+let scoreDiv = document.getElementById('score');
+if (!scoreDiv) {
+    scoreDiv = document.createElement('div');
+    scoreDiv.id = 'score';
+    scoreDiv.style.position = 'fixed';
+    scoreDiv.style.top = '2vw';
+    scoreDiv.style.left = '2vw';
+    scoreDiv.style.color = 'white';
+    scoreDiv.style.fontSize = '2.5vw';
+    scoreDiv.style.fontFamily = 'sans-serif';
+    scoreDiv.style.zIndex = '1000';
+    scoreDiv.style.textShadow = '0 0 10px #000';
+    document.body.appendChild(scoreDiv);
+}
+scoreDiv.innerText = `Score: 0`;
+
+function updateScoreDisplay() {
+    if (scoreDiv) scoreDiv.innerText = `Score: ${score}`;
+}
+
+function showGameOver() {
+    isGameOver = true;
+    let overlay = document.getElementById('game-over-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'game-over-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.background = 'rgba(0,0,0,0.8)';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.zIndex = '9999';
+        overlay.style.color = 'white';
+        overlay.style.fontSize = '4vw';
+        overlay.style.fontFamily = 'sans-serif';
+
+        const text = document.createElement('div');
+        text.innerText = 'GAME OVER';
+        text.style.marginBottom = '2vw';
+
+        // Show final score
+        const scoreText = document.createElement('div');
+        scoreText.innerText = `Score: ${score}`;
+        scoreText.style.fontSize = '2.5vw';
+        scoreText.style.marginBottom = '2vw';
+
+        const refreshBtn = document.createElement('button');
+        refreshBtn.innerText = 'Restart';
+        refreshBtn.style.fontSize = '2vw';
+        refreshBtn.style.padding = '1vw 2vw';
+        refreshBtn.style.border = 'none';
+        refreshBtn.style.borderRadius = '0.5vw';
+        refreshBtn.style.background = '#222244';
+        refreshBtn.style.color = 'white';
+        refreshBtn.style.cursor = 'pointer';
+        refreshBtn.style.boxShadow = '0 0 10px #0008';
+        refreshBtn.addEventListener('click', function() {
+            window.location.reload();
+        });
+
+        overlay.appendChild(text);
+        overlay.appendChild(scoreText);
+        overlay.appendChild(refreshBtn);
+
+        document.body.appendChild(overlay);
+    }
+}
+
 //================================================================================
 // Animation Loop
 //================================================================================
+
+// Helper: get the closest obstacle in front of the camera
+function getNextObstacleIndex() {
+    let minDist = Infinity;
+    let idx = -1;
+    for (let i = 0; i < obstacles.length; i++) {
+        const obs = obstacles[i];
+        if (obs.position.z < camera.position.z) continue; // Already passed
+        const dist = obs.position.z - camera.position.z;
+        if (dist < minDist) {
+            minDist = dist;
+            idx = i;
+        }
+    }
+    return idx;
+}
+
+// Improved collision: Only trigger game over if the rocket's bounding sphere actually overlaps the obstacle wall (not just near in Z)
+function checkRocketObstacleCollision() {
+    if (!rocket) return false;
+
+    // Get rocket's world position
+    const rocketWorldPos = new THREE.Vector3();
+    rocket.getWorldPosition(rocketWorldPos);
+
+    // We'll use a bounding sphere for the rocket
+    const rocketRadius = tubeRadius * 0.25;
+
+    for (const obs of obstacles) {
+        // Only check if rocket is at the same Z as the obstacle (within thickness)
+        const dz = Math.abs(rocketWorldPos.z - obs.position.z);
+        // The obstacle thickness is about 0.18, but fudge for speed
+        if (dz < 0.18 + rocketRadius * 1.1) {
+            // The obstacle is a ring with holes at certain angles
+            // If the rocket is NOT inside any hole, it's a collision
+
+            // For our patterns, holes are at fixed radii and angles
+            // We'll check both patterns for safety
+            let safe = false;
+            const patterns = [
+                [0, Math.PI],
+                [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3]
+            ];
+            for (const angles of patterns) {
+                for (let i = 0; i < angles.length; i++) {
+                    const holeAngle = angles[i];
+                    const hx = Math.cos(holeAngle) * tubeRadius * 0.49;
+                    const hy = Math.sin(holeAngle) * tubeRadius * 0.49;
+                    const dist = Math.sqrt(
+                        (rocketWorldPos.x - hx) * (rocketWorldPos.x - hx) +
+                        (rocketWorldPos.y - hy) * (rocketWorldPos.y - hy)
+                    );
+                    // The hole is a circle of radius tubeRadius*0.49, so if the rocket's center is within the hole minus its own radius, it's safe
+                    if (dist < tubeRadius * 0.49 - rocketRadius * 0.85) {
+                        safe = true;
+                        break;
+                    }
+                }
+                if (safe) break;
+            }
+            // If not safe, collision!
+            if (!safe) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 function animate() {
-    requestAnimationFrame(animate); // Use requestAnimationFrame for the loop
+    if (isGameOver) return;
+
+    requestAnimationFrame(animate);
 
     const delta = clock.getDelta();
     const elapsedTime = clock.getElapsedTime();
 
     // --- 1. Move the Camera ---
-    // Move the camera in the -Z direction (forward down the tunnel)
     camera.position.z -= cameraSpeed * delta;
 
     // --- 2. Update Rocket Position & Rotation (if it has loaded) ---
     if (rocket) {
         const targetX = joystickX * rocketMaxOffset;
         const targetY = -joystickY * rocketMaxOffset;
-        const lerpFactor = 5 * delta; // Frame-rate independent smoothing
+        const lerpFactor = 5 * delta;
 
         rocketCurrentX += (targetX - rocketCurrentX) * lerpFactor;
         rocketCurrentY += (targetY - rocketCurrentY) * lerpFactor;
 
-        // Update the rocket's LOCAL position
         rocket.position.x = rocketCurrentX;
         rocket.position.y = rocketCurrentY;
 
-        // If joystick is centered (no value change), make the rocket straight
-        
-            // Update rotation for effect
-            rocket.rotation.x = (rocketCurrentY / rocketMaxOffset) * 0.5;
-            rocket.rotation.y = Math.PI - (rocketCurrentX / rocketMaxOffset) * 0.3;
-            rocket.rotation.z = -(rocketCurrentX / rocketMaxOffset) * 1;
-        
+        rocket.rotation.x = (rocketCurrentY / rocketMaxOffset) * 0.5;
+        rocket.rotation.y = Math.PI - (rocketCurrentX / rocketMaxOffset) * 0.3;
+        rocket.rotation.z = -(rocketCurrentX / rocketMaxOffset) * 1;
 
-        // Animate flame
         for (let i = 0; i < rings.length; i++) {
             if (fire[i]) {
                 fire[i].scale.z = 0.8 + 0.3 * Math.sin(elapsedTime * 50 + i);
@@ -302,23 +419,45 @@ function animate() {
             tube.position.z = minZ - tubeLength + tubeOverlap;
         }
     }
-    // --- CORRECTED OBSTACLE RECYCLING (inside animate function) ---
-for (const obs of obstacles) {
-    // Check if the obstacle is "behind" the camera (Z is greater than camera's Z)
-    if (obs.position.z > camera.position.z) {
-        const minZ = Math.min(...obstacles.map(o => o.position.z));
-        // Move the obstacle far ahead (more negative Z)
-        obs.position.z = minZ - obstacleSpacing;
 
-        // Swap its geometry with another one from the pool (FAST!)
-        obs.geometry.dispose();
-        obs.geometry = obstacleGeometries[Math.floor(Math.random() * obstacleGeometries.length)];
+    // --- 3.1. Score update: check if we passed an obstacle ---
+    // Find the closest obstacle in front of the camera
+    let passed = false;
+    for (let i = 0; i < obstacles.length; i++) {
+        const obs = obstacles[i];
+        // If the obstacle is behind the camera and we haven't counted it yet
+        if (obs.position.z > camera.position.z && i !== lastPassedObstacleIndex) {
+            // Not yet passed
+            break;
+        }
+        if (obs.position.z <= camera.position.z && i !== lastPassedObstacleIndex) {
+            // Just passed this obstacle
+            score++;
+            lastPassedObstacleIndex = i;
+            updateScoreDisplay();
+            passed = true;
+            break;
+        }
     }
-}
-    
-    // --- 4. Render the Scene ---
+
+    // --- 3.2. Recycle obstacles ---
+    for (const obs of obstacles) {
+        if (obs.position.z > camera.position.z) {
+            const minZ = Math.min(...obstacles.map(o => o.position.z));
+            obs.position.z = minZ - obstacleSpacing;
+            obs.geometry.dispose();
+            obs.geometry = obstacleGeometries[Math.floor(Math.random() * obstacleGeometries.length)];
+        }
+    }
+
+    // --- 4. Check for collision (Game Over) ---
+    if (checkRocketObstacleCollision()) {
+        showGameOver();
+        return;
+    }
+
+    // --- 5. Render the Scene ---
     renderer.render(scene, camera);
 }
 
-// Start the animation loop
 animate();

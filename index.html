@@ -6,6 +6,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
       body { margin: 0; }
+      #score-board {
+        position: fixed;
+        top: 2vw;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 100;
+        background: rgba(16, 16, 42, 0.85);
+        color: #fff;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 2.2vw;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        padding: 0.6em 2em;
+        border-radius: 1.2em;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+        user-select: none;
+        pointer-events: none;
+        min-width: 120px;
+        text-align: center;
+      }
+      @media (max-width: 600px) {
+        #score-board {
+          font-size: 4vw;
+          padding: 0.5em 1.2em;
+        }
+      }
       #joystick-container {
         position: fixed;
         left: 50vw;
@@ -86,6 +112,8 @@
       <div id="joystick-base"></div>
       <div id="joystick-knob"></div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/GLTFLoader.min.js"></script>
     <script type="module" src="./main.js"></script>
     <script>
       // Responsive joystick logic
@@ -179,6 +207,10 @@
 
       // Initialize
       resetKnob();
+
+      // --- Score Board Logic ---
+      // The main.js file should dispatch a custom event 'scoreUpdate' with {score: <number>} in detail.
+    
     </script>
   </body>
 </html>
